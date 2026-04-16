@@ -43,7 +43,6 @@ async def get_supabase():
     retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)),
 )
 async def send_telegram_notification(msg: str):
-    """Надежная отправка в ТГ с ретраями при падении сети"""
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage",
@@ -54,9 +53,6 @@ async def send_telegram_notification(msg: str):
 
 
 async def process_webhook_background(order_data: dict):
-    """
-    Выполняется в фоне: не блокирует Event-Loop и не заставляет CRM ждать
-    """
     try:
         order = OrderSchema.model_validate(order_data)
 
@@ -95,9 +91,6 @@ async def process_webhook_background(order_data: dict):
 
 @app.get("/api/dashboard")
 async def get_dashboard_data():
-    """
-    Идеальный эндпоинт: 0 циклов, база считает всё сама за доли секунды.
-    """
     supabase = await get_supabase()
     response = await supabase.rpc("get_dashboard_metrics").execute()
 
@@ -146,17 +139,16 @@ async def get_dashboard_data():
 
 @app.post("/api/webhook")
 async def retailcrm_webhook(request: Request, bg_tasks: BackgroundTasks):
-    """
-    Принимает хук, отдает задачу в фон, отвечает RetailCRM за 1 мс.
-    """
-    form_data = await request.form()
-    order_json_str = form_data.get("order")
+    try:
+        form_data = await request.form()
+        if "order" in form_data:
+            order_data = json.loads(form_data.get("order"))
+        else:
+            body = await request.json()
+            order_data = body.get("order", body)
 
-    if not order_json_str:
-        return JSONResponse(status_code=400, content={"error": "No order data"})
-
-    order_data = json.loads(order_json_str)
-
-    bg_tasks.add_task(process_webhook_background, order_data)
-
-    return {"status": "ok"}
+        bg_tasks.add_task(process_webhook_background, order_data)
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"Error parsing webhook: {e}")
+        return JSONResponse(status_code=400, content={"error": "Invalid payload"})
