@@ -29,6 +29,8 @@ app.add_middleware(
 
 TG_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+CRM_URL = os.getenv("RETAILCRM_URL").rstrip("/")
+CRM_API_KEY = os.getenv("RETAILCRM_API_KEY")
 
 
 async def get_supabase():
@@ -52,8 +54,34 @@ async def send_telegram_notification(msg: str):
         response.raise_for_status()
 
 
-async def process_webhook(order_data: dict):
+async def fetch_order_from_crm(order_id: int) -> dict | None:
+    url = f"{CRM_URL}/api/v5/orders"
+    params = {
+        "apiKey": CRM_API_KEY,
+        "limit": 1,
+        "filter[ids][]": order_id,
+    }
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+    if not data.get("success"):
+        print(f"[RetailCRM] fetch error: {data}")
+        return None
+
+    orders = data.get("orders") or []
+    return orders[0] if orders else None
+
+
+async def process_webhook(webhook_data: dict):
     try:
+        order_id = webhook_data.get("id")
+        crm_order = await fetch_order_from_crm(order_id) if order_id else None
+
+        order_data = crm_order or webhook_data
+
         order = OrderSchema.model_validate(order_data)
 
         city = (
