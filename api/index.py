@@ -52,7 +52,7 @@ async def send_telegram_notification(msg: str):
         response.raise_for_status()
 
 
-async def process_webhook_background(order_data: dict):
+async def process_webhook(order_data: dict):
     try:
         order = OrderSchema.model_validate(order_data)
 
@@ -147,7 +147,8 @@ async def retailcrm_webhook(request: Request, bg_tasks: BackgroundTasks):
             body = await request.json()
             order_data = body.get("order", body)
 
-        bg_tasks.add_task(process_webhook_background, order_data)
+        await process_webhook(order_data)
+
         return {"status": "ok"}
     except Exception as e:
         print(f"Error parsing webhook: {e}")
