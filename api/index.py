@@ -78,9 +78,12 @@ async def fetch_order_from_crm(order_id: int) -> dict | None:
 async def process_webhook(webhook_data: dict):
     try:
         order_id = webhook_data.get("id")
+
         crm_order = await fetch_order_from_crm(order_id) if order_id else None
 
-        order_data = crm_order or webhook_data
+        order_data = dict(webhook_data)
+        if crm_order and crm_order.get("items") is not None:
+            order_data["items"] = crm_order.get("items", [])
 
         order = OrderSchema.model_validate(order_data)
 
