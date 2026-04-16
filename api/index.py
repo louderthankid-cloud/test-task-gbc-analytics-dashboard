@@ -172,21 +172,11 @@ async def retailcrm_webhook(request: Request):
 
         if "application/json" in content_type:
             payload = await request.json()
-            order_data = payload.get("order", payload)
-
-        elif (
-            "application/x-www-form-urlencoded" in content_type
-            or "multipart/form-data" in content_type
-        ):
-            form_data = await request.form()
-            raw = form_data.get("order") if "order" in form_data else None
-            order_data = json.loads(raw) if raw else dict(form_data)
-
         else:
             raw = await request.body()
             payload = json.loads(raw.decode("utf-8"))
-            order_data = payload.get("order", payload)
 
+        order_data = payload.get("order", payload)
         await process_webhook(order_data)
         return {"status": "ok"}
 
