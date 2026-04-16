@@ -56,7 +56,6 @@ const ProductList = ({ title, data }) => (
   </div>
 );
 
-// --- ФАБРИКА ВИДЖЕТОВ ---
 const WidgetFactory = ({ config }) => {
   switch (config.type) {
     case 'MetricCard':
@@ -73,7 +72,6 @@ const WidgetFactory = ({ config }) => {
 };
 
 
-// --- ГЛАВНАЯ СТРАНИЦА ---
 export default function App() {
   const [widgets, setWidgets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,16 +79,24 @@ export default function App() {
   const API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000' : '';
 
   useEffect(() => {
-    fetch(`${API_URL}/api/dashboard`)
-      .then(res => res.json())
-      .then(data => {
-        setWidgets(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Ошибка загрузки:", err);
-        setLoading(false);
-      });
+    const fetchData = () => {
+      fetch(`${API_URL}/api/dashboard`)
+        .then(res => res.json())
+        .then(data => {
+          setWidgets(data);
+          setLoading(false); 
+        })
+        .catch(err => {
+          console.error("Ошибка загрузки:", err);
+          setLoading(false);
+        });
+    };
+
+    fetchData();
+
+    const intervalId = setInterval(fetchData, 5000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   if (loading) return (
@@ -107,7 +113,7 @@ export default function App() {
           <p className="text-gray-500 text-sm mt-1">Отчет по продажам, товарам и трафику</p>
         </header>
         
-        {/* Рендерим виджеты. Добавлена логика masonry / grid */}
+        {}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           {widgets.filter(w => w.type === 'MetricCard').map(widget => (
             <WidgetFactory key={widget.id} config={widget} />
