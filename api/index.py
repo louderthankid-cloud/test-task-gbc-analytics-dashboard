@@ -138,18 +138,30 @@ async def get_dashboard_data():
 
 
 @app.post("/api/webhook")
-async def retailcrm_webhook(request: Request, bg_tasks: BackgroundTasks):
+async def retailcrm_webhook(request: Request):
     try:
-        form_data = await request.form()
-        if "order" in form_data:
-            order_data = json.loads(form_data.get("order"))
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            payload = await request.json()
+            order_data = payload.get("order", payload)
+
+        elif (
+            "application/x-www-form-urlencoded" in content_type
+            or "multipart/form-data" in content_type
+        ):
+            form_data = await request.form()
+            raw = form_data.get("order") if "order" in form_data else None
+            order_data = json.loads(raw) if raw else dict(form_data)
+
         else:
-            body = await request.json()
-            order_data = body.get("order", body)
+            raw = await request.body()
+            payload = json.loads(raw.decode("utf-8"))
+            order_data = payload.get("order", payload)
 
         await process_webhook(order_data)
-
         return {"status": "ok"}
+
     except Exception as e:
-        print(f"Error parsing webhook: {e}")
+        print(f"Webhook error: {e}")
         return JSONResponse(status_code=400, content={"error": "Invalid payload"})
