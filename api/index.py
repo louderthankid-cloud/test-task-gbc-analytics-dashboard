@@ -29,8 +29,6 @@ app.add_middleware(
 
 TG_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-CRM_URL = os.getenv("RETAILCRM_URL").rstrip("/")
-CRM_API_KEY = os.getenv("RETAILCRM_API_KEY")
 
 
 async def get_supabase():
@@ -54,37 +52,8 @@ async def send_telegram_notification(msg: str):
         response.raise_for_status()
 
 
-async def fetch_order_from_crm(order_id: int) -> dict | None:
-    url = f"{CRM_URL}/api/v5/orders"
-    params = {
-        "apiKey": CRM_API_KEY,
-        "limit": 1,
-        "filter[ids][]": order_id,
-    }
-
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()
-
-    if not data.get("success"):
-        print(f"[RetailCRM] fetch error: {data}")
-        return None
-
-    orders = data.get("orders") or []
-    return orders[0] if orders else None
-
-
-async def process_webhook(webhook_data: dict):
+async def process_webhook(order_data: dict):
     try:
-        order_id = webhook_data.get("id")
-
-        crm_order = await fetch_order_from_crm(order_id) if order_id else None
-
-        order_data = dict(webhook_data)
-        if crm_order and crm_order.get("items") is not None:
-            order_data["items"] = crm_order.get("items", [])
-
         order = OrderSchema.model_validate(order_data)
 
         city = (
@@ -169,20 +138,18 @@ async def get_dashboard_data():
 
 
 @app.post("/api/webhook")
-async def retailcrm_webhook(request: Request):
+async def retailcrm_webhook(request: Request, bg_tasks: BackgroundTasks):
     try:
-        content_type = request.headers.get("content-type", "")
-
-        if "application/json" in content_type:
-            payload = await request.json()
+        form_data = await request.form()
+        if "order" in form_data:
+            order_data = json.loads(form_data.get("order"))
         else:
-            raw = await request.body()
-            payload = json.loads(raw.decode("utf-8"))
+            body = await request.json()
+            order_data = body.get("order", body)
 
-        order_data = payload.get("order", payload)
         await process_webhook(order_data)
-        return {"status": "ok"}
 
+        return {"status": "ok"}
     except Exception as e:
-        print(f"Webhook error: {e}")
+        print(f"Error parsing webhook: {e}")
         return JSONResponse(status_code=400, content={"error": "Invalid payload"})

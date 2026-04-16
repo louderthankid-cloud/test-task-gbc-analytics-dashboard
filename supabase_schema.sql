@@ -38,7 +38,7 @@ BEGIN
             SELECT COALESCE(json_agg(json_build_object('name', p_name, 'value', qty)), '[]'::json)
             FROM (
                 SELECT 
-                    COALESCE(item->'offer'->>'name', item->>'productName', item->>'name', 'Неизвестно') as p_name,
+                    COALESCE(item->'offer'->>'name', item->>'productName', 'Неизвестно') as p_name,
                     SUM(CAST(item->>'quantity' AS numeric)) as qty
                 FROM orders,
                 jsonb_array_elements(
